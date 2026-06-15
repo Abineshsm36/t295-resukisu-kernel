@@ -23,11 +23,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             bc bison build-essential ccache curl flex \
-            g++-multilib gcc-multilib git gnupg gperf \
+            git gnupg gperf \
             libssl-dev libxml2 libxml2-utils liblz4-tool \
             zip zlib1g-dev make python3 binutils \
             gcc-aarch64-linux-gnu
-
       - name: Clone kernel source
         run: |
           git clone --depth=1 https://github.com/${{ github.repository }} kernel
