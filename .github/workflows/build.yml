@@ -6,7 +6,7 @@ on:
       defconfig:
         description: 'Defconfig name (without _defconfig)'
         required: true
-        default: 'lineage_a8q'  # change this to your actual defconfig name
+        default: 'lineage_a8q'
 
 jobs:
   build:
@@ -27,12 +27,21 @@ jobs:
             libssl-dev libxml2 libxml2-utils liblz4-tool \
             zip zlib1g-dev make python3 binutils \
             gcc-aarch64-linux-gnu
+
       - name: Clone kernel source
         run: |
           git clone --depth=1 https://github.com/${{ github.repository }} kernel
-        # This clones YOUR repo. If your kernel source is in a subdirectory
-        # or a different branch, adjust accordingly:
-        # git clone --depth=1 --branch your-branch https://github.com/YOUR_USER/YOUR_REPO kernel
+
+      - name: Debug - check kernel dir
+        run: |
+          echo "=== Workspace root ==="
+          ls ${{ github.workspace }}
+          echo ""
+          echo "=== Inside kernel/ ==="
+          ls ${{ github.workspace }}/kernel || echo "kernel/ does not exist!"
+          echo ""
+          echo "=== Does drivers/ exist? ==="
+          ls ${{ github.workspace }}/kernel/drivers || echo "drivers/ NOT FOUND"
 
       - name: Set up ccache
         run: |
@@ -56,7 +65,6 @@ jobs:
       - name: Enable KSU in defconfig
         working-directory: kernel
         run: |
-          # Find the defconfig file
           DEFCONFIG_PATH=$(find arch/arm64/configs -name "${{ github.event.inputs.defconfig }}_defconfig" | head -1)
 
           if [ -z "$DEFCONFIG_PATH" ]; then
@@ -68,11 +76,9 @@ jobs:
 
           echo "Found defconfig at: $DEFCONFIG_PATH"
 
-          # Enable ReSukiSU with Manual Hook (required for kernel 4.9)
           grep -q "CONFIG_KSU" "$DEFCONFIG_PATH" || echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
           grep -q "CONFIG_KSU_MANUAL_HOOK" "$DEFCONFIG_PATH" || echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$DEFCONFIG_PATH"
 
-          # Disable KPROBES - causes crashes on kernel 4.9 with manual hook
           sed -i 's/CONFIG_KPROBES=y/CONFIG_KPROBES=n/' "$DEFCONFIG_PATH"
           grep -q "CONFIG_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_KPROBES=n" >> "$DEFCONFIG_PATH"
 
@@ -87,11 +93,9 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CCACHE_DIR=$HOME/.ccache
 
-          # Generate .config from defconfig
           make O=out ARCH=arm64 \
             ${{ github.event.inputs.defconfig }}_defconfig
 
-          # Build — using -j4 for GitHub Actions free runner (2 vCPU)
           make O=out ARCH=arm64 \
             CROSS_COMPILE=ccache\ aarch64-linux-gnu- \
             -j4 2>&1 | tee build.log
@@ -104,7 +108,6 @@ jobs:
           echo "Available images in out/arch/arm64/boot/:"
           find out/arch/arm64/boot/ -maxdepth 1 -type f | sort
 
-          # Export whichever image exists, priority order for SDM429
           for img in \
             out/arch/arm64/boot/Image.gz-dtb \
             out/arch/arm64/boot/Image-dtb \
@@ -130,10 +133,8 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3 AK3
 
-          # Copy kernel image
           cp "${{ env.KERNEL_IMAGE }}" AK3/
 
-          # Set up AnyKernel3 config for SM-T295
           cat > AK3/anykernel.sh << 'EOF'
           # AnyKernel3 config for SM-T295
           properties() { '
@@ -159,7 +160,6 @@ jobs:
           flash_boot
           EOF
 
-          # Build the zip
           cd AK3
           zip -r9 ../ReSukiSU-SM-T295-$(date +%Y%m%d).zip . \
             -x '*.git*' -x 'README.md'
