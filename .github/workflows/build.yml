@@ -6,7 +6,7 @@ jobs:
   build-kernel:
     runs-on: ubuntu-latest
     steps:
-      # 1. Automatically clones your exact repository and active branch safely
+      # 1. Automatically clones your repository and active branch safely
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
@@ -32,6 +32,10 @@ jobs:
           aosp-clang: true
           aosp-clang-version: r383902
           aosp-gcc: true
+          
+          # Force disables Link-Time Optimization to prevent silent log freezes
+          disable-lto: true
+          
           ksu: true
           ksu-other: true
           ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
