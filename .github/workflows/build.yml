@@ -1,5 +1,4 @@
 name: Build ReSukiSU Kernel
-
 on:
   workflow_dispatch:
 
@@ -7,38 +6,22 @@ jobs:
   build-kernel:
     runs-on: ubuntu-latest
     steps:
-      # 1. Pull down your repository into the runner workspace
-      - name: Checkout Kernel Source
+      - name: Checkout Code Workspace
         uses: actions/checkout@v4
-        with:
-          repository: AbineshSathiamoorthy/ReSukiSU  # Replace with your exact user/repo string
-          ref: lineage-22.2
-          path: kernel-source
 
-      # 2. Strip out modern DTC flags that break legacy Qualcomm compilation
-      - name: Patch Legacy DTC Flags
-        run: |
-          cd kernel-source
-          if [ -f scripts/Makefile.lib ]; then
-            sed -i 's/DTC_FLAGS += -@//g' scripts/Makefile.lib
-            sed -i 's/DTC_FLAGS += --allow-missing-phandles//g' scripts/Makefile.lib
-          fi
-          if [ -f arch/arm64/boot/dts/qcom/Makefile ]; then
-            sed -i 's/DTC_FLAGS += -@//g' arch/arm64/boot/dts/qcom/Makefile
-          fi
-
-      # 3. Compile using the local patched directory
-      - name: Build Android Kernel
+      - name: Compile Android Kernel with SukiSU
         uses: dabao1955/kernel_build_action@main
         with:
-          kernel-url: ./kernel-source/
-          config: your_defconfig_file_name  # Replace with your actual defconfig name (e.g., msm8937_defconfig)
+          kernel-url: https://github.com/Abineshsm36/t295-resukisu-kernel
+          kernel-branch: lineage-22.2
+          config: lineageos_gtowifi_defconfig
           arch: arm64
+          android-version: 15
+          ksu: true
+          ksu-other: true
+          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
           
-          # Using older, legacy-friendly versions prevents modern LLVM compiler panics
+          # Force a legacy Android toolchain to fix the sdm429.dtb "unknown option" error
           aosp-clang: true
           aosp-clang-version: r383902
           aosp-gcc: true
-          
-          # Explicitly pass an empty DTC_FLAGS override to make double sure it doesn't get re-injected
-          extra-make-args: '["DTC_FLAGS="]'
