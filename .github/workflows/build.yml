@@ -21,7 +21,7 @@ jobs:
             sed -i 's/DTC_FLAGS += -@//g' arch/arm64/boot/dts/qcom/Makefile
           fi
 
-      # 3. Compiles the kernel using the root workspace directory "."
+      # 3. Compiles the kernel using Proton Clang from GitHub
       - name: Compile Android Kernel with SukiSU
         uses: dabao1955/kernel_build_action@main
         with:
@@ -29,13 +29,16 @@ jobs:
           config: lineageos_gtowifi_defconfig
           arch: arm64
           android-version: 12
-          aosp-clang: true
-          aosp-clang-version: r383902
+          
+          # Turn off the broken Google AOSP Clang download
+          aosp-clang: false
+          
+          # Point the builder to Proton Clang hosted natively on GitHub
+          other-clang-url: https://github.com/kdrag0n/proton-clang
+          other-clang-branch: master
+          
           aosp-gcc: true
-          
-          # Force disables Link-Time Optimization to prevent silent log freezes
           disable-lto: true
-          
           ksu: true
           ksu-other: true
           ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
