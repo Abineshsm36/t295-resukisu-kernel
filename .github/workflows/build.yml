@@ -1,22 +1,25 @@
-name: Build SukiSU-Ultra Kernel
+name: Build SukiSU Legacy Kernel
 on:
   workflow_dispatch:
 
 jobs:
-  build-kernel:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository Workspace
+      - name: Checkout Code Workspace
         uses: actions/checkout@v4
 
-      - name: Compile Android Kernel with SukiSU
-        uses: dabao1955/kernel_build_action@main
+      - name: Compile Qualcomm Kernel
+        uses: xiaoxindada/kernel_build_action@main
         with:
-          kernel-url: https://github.com/LineageOS/android_kernel_samsung_sdm429
-          kernel-branch: lineage-22.2
-          config: lineageos_gtowifi_defconfig
-          arch: arm64
-          android-version: 15
-          ksu: true
-          ksu-other: true
-          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
+          KERNEL_URL: YOUR_K_SOURCE_URL_HERE
+          KERNEL_BRANCH: YOUR_K_BRANCH_HERE
+          KERNEL_CONFIG: lineageos_gtowifi_defconfig
+          ARCH: arm64
+          
+          # This tells the compiler to use an older, highly-compatible Clang version
+          CLANG_VERSION: r383902
+          
+          # Enables the automated SukiSU-Ultra integration
+          KSU: true
+          KSU_VERSION: main
