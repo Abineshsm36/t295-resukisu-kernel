@@ -6,22 +6,41 @@ jobs:
   build-kernel:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code Workspace
+      # 1. Download your repository into a local workspace directory
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
+        with:
+          repository: Abineshsm36/t295-resukisu-kernel
+          ref: lineage-22.2
+          path: kernel-source
 
+      # 2. Hard-strip the modern flags that cause the sdm429.dtb "unknown option" error
+      - name: Patch Legacy DTC Flags
+        run: |
+          cd kernel-source
+          if [ -f scripts/Makefile.lib ]; then
+            sed -i 's/DTC_FLAGS += -@//g' scripts/Makefile.lib
+            sed -i 's/DTC_FLAGS += --allow-missing-phandles//g' scripts/Makefile.lib
+          fi
+          if [ -f arch/arm64/boot/dts/qcom/Makefile ]; then
+            sed -i 's/DTC_FLAGS += -@//g' arch/arm64/boot/dts/qcom/Makefile
+          fi
+
+      # 3. Build using the local path with a compatible Android 12 download manifest
       - name: Compile Android Kernel with SukiSU
         uses: dabao1955/kernel_build_action@main
         with:
-          kernel-url: https://github.com/Abineshsm36/t295-resukisu-kernel
-          kernel-branch: lineage-22.2
+          kernel-url: ./kernel-source/
           config: lineageos_gtowifi_defconfig
           arch: arm64
-          android-version: 15
-          ksu: true
-          ksu-other: true
-          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
           
-          # Force a legacy Android toolchain to fix the sdm429.dtb "unknown option" error
+          # Shifting this to 12 makes Google's server accept the r383902 download request
+          android-version: 12
           aosp-clang: true
           aosp-clang-version: r383902
           aosp-gcc: true
+          
+          # Inject SukiSU-Ultra root
+          ksu: true
+          ksu-other: true
+          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
