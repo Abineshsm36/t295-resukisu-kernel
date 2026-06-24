@@ -1,183 +1,22 @@
-name: Build ReSukiSU Kernel (SM-T295)
-
+name: Build SukiSU-Ultra Kernel
 on:
   workflow_dispatch:
-    inputs:
-      defconfig:
-        description: 'Defconfig name (without _defconfig)'
-        required: true
-        default: 'lineage_a8q'
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-
+  build-kernel:
+    runs-on: ubuntu-latest
     steps:
-      - name: Set up job
-        run: |
-          echo "Building ReSukiSU kernel for SM-T295 (SDM429, kernel 4.9)"
-          echo "Defconfig: ${{ github.event.inputs.defconfig }}"
+      - name: Checkout Repository Workspace
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bc bison build-essential ccache curl flex \
-            git gnupg gperf \
-            libssl-dev libxml2 libxml2-utils liblz4-tool \
-            zip zlib1g-dev make python3 binutils \
-            gcc-aarch64-linux-gnu
-
-      - name: Clone kernel source
-        run: |
-          git clone --depth=1 https://github.com/${{ github.repository }} kernel
-
-      - name: Debug - check kernel dir
-        run: |
-          echo "=== Workspace root ==="
-          ls ${{ github.workspace }}
-          echo ""
-          echo "=== Inside kernel/ ==="
-          ls ${{ github.workspace }}/kernel || echo "kernel/ does not exist!"
-          echo ""
-          echo "=== Does drivers/ exist? ==="
-          ls ${{ github.workspace }}/kernel/drivers || echo "drivers/ NOT FOUND"
-
-      - name: Set up ccache
-        run: |
-          ccache -M 5G
-          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
-          echo "USE_CCACHE=1" >> $GITHUB_ENV
-
-      - name: Cache ccache
-        uses: actions/cache@v4
+      - name: Compile Android Kernel with SukiSU
+        uses: dabao1955/kernel_build_action@main
         with:
-          path: ~/.ccache
-          key: ccache-sdm429-${{ github.sha }}
-          restore-keys: |
-            ccache-sdm429-
-
-      - name: Inject ReSukiSU
-        working-directory: kernel
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
-
-      - name: Enable KSU in defconfig
-        working-directory: kernel
-        run: |
-          DEFCONFIG_PATH=$(find arch/arm64/configs -name "${{ github.event.inputs.defconfig }}_defconfig" | head -1)
-
-          if [ -z "$DEFCONFIG_PATH" ]; then
-            echo "ERROR: Could not find defconfig: ${{ github.event.inputs.defconfig }}_defconfig"
-            echo "Available defconfigs:"
-            find arch/arm64/configs -name "*_defconfig" | sort
-            exit 1
-          fi
-
-          echo "Found defconfig at: $DEFCONFIG_PATH"
-
-          grep -q "CONFIG_KSU" "$DEFCONFIG_PATH" || echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
-          grep -q "CONFIG_KSU_MANUAL_HOOK" "$DEFCONFIG_PATH" || echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$DEFCONFIG_PATH"
-
-          sed -i 's/CONFIG_KPROBES=y/CONFIG_KPROBES=n/' "$DEFCONFIG_PATH"
-          grep -q "CONFIG_KPROBES" "$DEFCONFIG_PATH" || echo "CONFIG_KPROBES=n" >> "$DEFCONFIG_PATH"
-
-          echo "--- KSU config applied ---"
-          grep -E "CONFIG_KSU|CONFIG_KPROBES" "$DEFCONFIG_PATH"
-
-      - name: Build kernel
-        working-directory: kernel
-        run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CCACHE_DIR=$HOME/.ccache
-
-          make O=out ARCH=arm64 \
-            ${{ github.event.inputs.defconfig }}_defconfig
-
-          make O=out ARCH=arm64 \
-            CROSS_COMPILE=ccache\ aarch64-linux-gnu- \
-            -j4 2>&1 | tee build.log
-
-          echo "--- Build finished ---"
-
-      - name: Find kernel image
-        working-directory: kernel
-        run: |
-          echo "Available images in out/arch/arm64/boot/:"
-          find out/arch/arm64/boot/ -maxdepth 1 -type f | sort
-
-          for img in \
-            out/arch/arm64/boot/Image.gz-dtb \
-            out/arch/arm64/boot/Image-dtb \
-            out/arch/arm64/boot/Image.gz \
-            out/arch/arm64/boot/Image \
-            out/arch/arm64/boot/zImage-dtb \
-            out/arch/arm64/boot/zImage; do
-            if [ -f "$img" ]; then
-              echo "KERNEL_IMAGE=$img" >> $GITHUB_ENV
-              echo "Found kernel image: $img"
-              break
-            fi
-          done
-
-          if [ -z "$KERNEL_IMAGE" ] && ! grep -q "KERNEL_IMAGE" $GITHUB_ENV; then
-            echo "ERROR: No kernel image found. Check Build kernel step logs."
-            tail -50 build.log
-            exit 1
-          fi
-
-      - name: Package as AnyKernel3 flashable zip
-        working-directory: kernel
-        run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 AK3
-
-          cp "${{ env.KERNEL_IMAGE }}" AK3/
-
-          cat > AK3/anykernel.sh << 'EOF'
-          # AnyKernel3 config for SM-T295
-          properties() { '
-          kernel.string=ReSukiSU Kernel for SM-T295
-          do.devicecheck=1
-          do.modules=0
-          do.systemless=1
-          do.cleanup=1
-          do.cleanuponabort=0
-          device.name1=a8q
-          device.name2=SM-T295
-          supported.versions=
-          '; }
-
-          block=/dev/block/platform/soc/7824900.sdhci/by-name/boot
-          is_slot_device=0
-          ramdisk_compression=auto
-
-          . tools/ak3-core.sh
-          . tools/busybox install
-
-          split_boot
-          flash_boot
-          EOF
-
-          cd AK3
-          zip -r9 ../ReSukiSU-SM-T295-$(date +%Y%m%d).zip . \
-            -x '*.git*' -x 'README.md'
-
-          echo "Zip created:"
-          ls -lh ../ReSukiSU-SM-T295-*.zip
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ReSukiSU-SM-T295-${{ github.run_number }}
-          path: kernel/ReSukiSU-SM-T295-*.zip
-          retention-days: 7
-
-      - name: Upload build log (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-${{ github.run_number }}
-          path: kernel/build.log
-          retention-days: 3
+          kernel-url: https://github.com/LineageOS/android_kernel_samsung_sdm429
+          kernel-branch: lineage-22.2
+          config: lineageos_gtowifi_defconfig
+          arch: arm64
+          android-version: 15
+          ksu: true
+          ksu-other: true
+          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
