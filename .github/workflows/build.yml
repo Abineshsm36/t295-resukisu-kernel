@@ -6,18 +6,13 @@ jobs:
   build-kernel:
     runs-on: ubuntu-latest
     steps:
-      # 1. Download your repository into a local workspace directory
+      # 1. Automatically clones your exact repository and active branch safely
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
-        with:
-          repository: Abineshsm36/t295-resukisu-kernel
-          ref: lineage-22.2
-          path: kernel-source
 
-      # 2. Hard-strip the modern flags that cause the sdm429.dtb "unknown option" error
+      # 2. Strips out the modern compiler flags right in the root folder
       - name: Patch Legacy DTC Flags
         run: |
-          cd kernel-source
           if [ -f scripts/Makefile.lib ]; then
             sed -i 's/DTC_FLAGS += -@//g' scripts/Makefile.lib
             sed -i 's/DTC_FLAGS += --allow-missing-phandles//g' scripts/Makefile.lib
@@ -26,21 +21,17 @@ jobs:
             sed -i 's/DTC_FLAGS += -@//g' arch/arm64/boot/dts/qcom/Makefile
           fi
 
-      # 3. Build using the local path with a compatible Android 12 download manifest
+      # 3. Compiles the kernel using the root workspace directory "."
       - name: Compile Android Kernel with SukiSU
         uses: dabao1955/kernel_build_action@main
         with:
-          kernel-url: ./kernel-source/
+          kernel-url: .
           config: lineageos_gtowifi_defconfig
           arch: arm64
-          
-          # Shifting this to 12 makes Google's server accept the r383902 download request
           android-version: 12
           aosp-clang: true
           aosp-clang-version: r383902
           aosp-gcc: true
-          
-          # Inject SukiSU-Ultra root
           ksu: true
           ksu-other: true
           ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
